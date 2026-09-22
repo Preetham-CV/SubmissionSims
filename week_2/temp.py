@@ -128,6 +128,46 @@ class SandSim:
         copy, and write the result into the live grid (or vice versa).
         """
 
+        G = self._types
+        GPrime = G.copy()
+        randomPermute = np.random.permutation(self.width)
+
+        for y in range(self.height - 1, -1 , -1):
+            
+            for x in randomPermute:
+                if(G[y,x] == Material.SAND):
+
+                    if y == self.height - 1:
+                        break
+
+                    leftOK = x-1 >= 0 and GPrime[y+1, x-1] == Material.EMPTY
+                    rightOK = x+1 < self.width and GPrime[y+1, x+1] == Material.EMPTY
+                    
+
+                    if(GPrime[y+1,x] == Material.EMPTY):
+                        GPrime[y+1,x] = Material.SAND
+                        GPrime[y,x] = Material.EMPTY
+                    elif (leftOK and rightOK):
+                        change = _rng.integers(0,2)
+                        GPrime[y,x] = Material.EMPTY
+                        if change == 0 :
+                            GPrime[y+1,x-1] = Material.SAND
+                        else:
+                            GPrime[y+1,x+1] = Material.SAND
+                    elif(leftOK):
+                        GPrime[y+1,x-1] = Material.SAND
+                        GPrime[y,x] = Material.EMPTY
+                    elif(rightOK):
+                        GPrime[y+1,x+1] = Material.SAND
+                        GPrime[y,x] = Material.EMPTY
+
+
+                
+        self._types = GPrime
+
+                    
+                    
+            
             
 
     # ------------------------------------------------------------------ #
