@@ -132,35 +132,72 @@ class SandSim:
         GPrime = G.copy()
         randomPermute = np.random.permutation(self.width)
 
-        for y in range(self.height - 1, -1 , -1):
-            
+        for y in range(self.height - 1, -1, -1):
             for x in randomPermute:
-                if(G[y,x] == Material.SAND):
+                material = G[y, x]   
 
-                    if y == self.height - 1:
-                        break
+                if material == Material.SAND:
+                    if y + 1 >= self.height:
+                        continue  
 
                     leftOK = x-1 >= 0 and GPrime[y+1, x-1] == Material.EMPTY
                     rightOK = x+1 < self.width and GPrime[y+1, x+1] == Material.EMPTY
-                    
 
-                    if(GPrime[y+1,x] == Material.EMPTY):
-                        GPrime[y+1,x] = Material.SAND
-                        GPrime[y,x] = Material.EMPTY
-                    elif (leftOK and rightOK):
-                        change = _rng.integers(0,2)
-                        GPrime[y,x] = Material.EMPTY
-                        if change == 0 :
-                            GPrime[y+1,x-1] = Material.SAND
+                    if GPrime[y+1, x] == Material.EMPTY:
+                        GPrime[y+1, x] = Material.SAND
+                        GPrime[y, x] = Material.EMPTY
+                    elif leftOK and rightOK:
+                        change = _rng.integers(0, 2)
+                        GPrime[y, x] = Material.EMPTY
+                        if change == 0:
+                            GPrime[y+1, x-1] = Material.SAND
                         else:
-                            GPrime[y+1,x+1] = Material.SAND
-                    elif(leftOK):
-                        GPrime[y+1,x-1] = Material.SAND
-                        GPrime[y,x] = Material.EMPTY
-                    elif(rightOK):
-                        GPrime[y+1,x+1] = Material.SAND
-                        GPrime[y,x] = Material.EMPTY
+                            GPrime[y+1, x+1] = Material.SAND
+                    elif leftOK:
+                        GPrime[y+1, x-1] = Material.SAND
+                        GPrime[y, x] = Material.EMPTY
+                    elif rightOK:
+                        GPrime[y+1, x+1] = Material.SAND
+                        GPrime[y, x] = Material.EMPTY
 
+                elif material == Material.WATER:   
+                    canFall = y + 1 < self.height   
+
+                    leftOK = canFall and x-1 >= 0 and GPrime[y+1, x-1] == Material.EMPTY
+                    rightOK = canFall and x+1 < self.width and GPrime[y+1, x+1] == Material.EMPTY
+
+                    if canFall and GPrime[y+1, x] == Material.EMPTY:
+                        GPrime[y+1, x] = Material.WATER
+                        GPrime[y, x] = Material.EMPTY
+                    elif leftOK and rightOK:
+                        change = _rng.integers(0, 2)
+                        GPrime[y, x] = Material.EMPTY
+                        if change == 0:
+                            GPrime[y+1, x-1] = Material.WATER
+                        else:
+                            GPrime[y+1, x+1] = Material.WATER
+                    elif leftOK:
+                        GPrime[y+1, x-1] = Material.WATER
+                        GPrime[y, x] = Material.EMPTY
+                    elif rightOK:
+                        GPrime[y+1, x+1] = Material.WATER
+                        GPrime[y, x] = Material.EMPTY
+                    else:
+                        leftSpread = x-1 >= 0 and GPrime[y, x-1] == Material.EMPTY
+                        rightSpread = x+1 < self.width and GPrime[y, x+1] == Material.EMPTY
+                        if leftSpread and rightSpread:
+                            change = _rng.integers(0, 2)
+                            GPrime[y, x] = Material.EMPTY
+                            if change == 0:
+                                GPrime[y, x-1] = Material.WATER
+                            else:
+                                GPrime[y, x+1] = Material.WATER
+                        elif leftSpread:
+                            GPrime[y, x-1] = Material.WATER
+                            GPrime[y, x] = Material.EMPTY
+                        elif rightSpread:
+                            GPrime[y, x+1] = Material.WATER
+                            GPrime[y, x] = Material.EMPTY
 
                 
         self._types = GPrime
@@ -189,6 +226,9 @@ class SandSim:
                 surf, (self.width * self.cell_size, self.height * self.cell_size)
             )
         return surf
+
+
+    
 
 
 def main() -> None:
