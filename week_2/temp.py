@@ -61,51 +61,6 @@ class SandSim:
     ``x`` (0 = left).
     """
 
-    def fallOrSlide(self, GPrime, y,x, material) -> bool:
-        canFall = y+1 < self.height
-        if not canFall:
-            return False
-
-        if GPrime[y+1, x] == Material.EMPTY:
-            GPrime[y+1, x] = material
-            GPrime[y, x] = Material.EMPTY
-            return True
-
-        leftOK = x-1 >= 0 and GPrime[y+1, x-1] == Material.EMPTY
-        rightOK = x+1 < self.width and GPrime[y+1, x+1] == Material.EMPTY
-
-        if leftOK and rightOK:
-            change = _rng.integers(0,2)
-            delX = -1 if change == 0 else 1
-        elif leftOK:
-            delX = -1
-        elif rightOK:
-            delX = 1
-        else:
-            return False
-
-        GPrime[y+1, x + delX] = material
-        GPrime[y, x] = Material.EMPTY
-        return True
-
-    def flow(self, GPrime, y,x,material):
-        leftOK = x-1 >= 0 and GPrime[y, x-1] == Material.EMPTY
-        rightOK = x+1 < self.width and GPrime[y, x+1] == Material.EMPTY
-        
-        if leftOK and rightOK:
-            change = _rng.integers(0,2)
-            delx = -1 if change == 0 else 1
-        elif leftOK:
-            delx = -1
-        elif rightOK:
-            delx = 1
-        else:
-            return
-        
-
-        GPrime[y, x+delx] = material
-        GPrime[y, x] = Material.EMPTY
-
     def __init__(self, width: int, height: int, cell_size: int = 4, fps: int = 60) -> None:
         self.cell_size = cell_size
         self.fps = fps
@@ -174,21 +129,82 @@ class SandSim:
         """
 
         G = self._types
-        GPrime = G.copy()
-        randomPermute = np.random.permutation(self.width)
+        Gp = G.copy()
+        H, W = self.height, self.width
 
-        for y in range(self.height - 1, -1, -1):
-            for x in randomPermute:
-                material = G[y, x]   
+        for y in range(H - 1, -1, -1):
+            row = G[y, :]
+            is_solid = (row == Material.SAND) | (row == Material.WATER)
+            if not is_solid.any():
+                continue
 
-                if material == Material.SAND:
-                    self.fallOrSlide(GPrime, y, x, material)
-                elif material == Material.WATER:
-                    if not self.fallOrSlide(GPrime, y, x, material):
-                        self.flow(GPrime, y, x, material)
+            can_fall = y + 1 < H
+            below = Gp[y + 1, :] if can_fall else None
 
-                
-        self._types = GPrime
+            #vertical fall
+            if can_fall:
+                fall_mask = is_solid & (below == Material.EMPTY)
+                Gp[y + 1, fall_mask] = row[fall_mask]
+                Gp[y, fall_mask] = Material.EMPTY
+                remaining = is_solid & ~fall_mask
+            else:
+                remaining = is_solid.copy()
+
+        
+            #diagonal slide
+            if can_fall and remaining.any():
+                below = Gp[y + 1, :]
+                xs = np.nonzero(remaining)[0]
+
+                left_ok = (xs - 1 >= 0) & (below[np.clip(xs - 1, 0, W - 1)] == Material.EMPTY)
+                right_ok = (xs + 1 < W) & (below[np.clip(xs + 1, 0, W - 1)] == Material.EMPTY)
+
+                coin = np.random.random(xs.size) < 0.5
+                want_left = (left_ok & right_ok & coin) | (left_ok & ~right_ok)
+                want_right = (left_ok & right_ok & ~coin) | (right_ok & ~left_ok)
+                dx = np.where(want_left, -1, np.where(want_right, 1, 0))
+
+                move_xs = xs[dx != 0]
+                move_targets = move_xs + dx[dx != 0]
+
+                if move_xs.size:
+                    order = np.random.permutation(move_xs.size)
+                    move_xs, move_targets = move_xs[order], move_targets[order]
+                    _, first_idx = np.unique(move_targets, return_index=True)
+                    wx, wt = move_xs[first_idx], move_targets[first_idx]
+
+                    Gp[y + 1, wt] = row[wx]
+                    Gp[y, wx] = Material.EMPTY
+                    below[wt] = row[wx]
+                    remaining[wx] = False
+
+            #  Sideways spread — water only
+            water_remaining = remaining & (row == Material.WATER)
+            if water_remaining.any():
+                live = Gp[y, :]
+                xs = np.nonzero(water_remaining)[0]
+
+                left_ok = (xs - 1 >= 0) & (live[np.clip(xs - 1, 0, W - 1)] == Material.EMPTY)
+                right_ok = (xs + 1 < W) & (live[np.clip(xs + 1, 0, W - 1)] == Material.EMPTY)
+
+                coin = np.random.random(xs.size) < 0.5
+                want_left = (left_ok & right_ok & coin) | (left_ok & ~right_ok)
+                want_right = (left_ok & right_ok & ~coin) | (right_ok & ~left_ok)
+                dx = np.where(want_left, -1, np.where(want_right, 1, 0))
+
+                move_xs = xs[dx != 0]
+                move_targets = move_xs + dx[dx != 0]
+
+                if move_xs.size:
+                    order = np.random.permutation(move_xs.size)
+                    move_xs, move_targets = move_xs[order], move_targets[order]
+                    _, first_idx = np.unique(move_targets, return_index=True)
+                    wx, wt = move_xs[first_idx], move_targets[first_idx]
+
+                    Gp[y, wt] = Material.WATER
+                    Gp[y, wx] = Material.EMPTY
+
+        self._types = Gp
 
                     
                     
