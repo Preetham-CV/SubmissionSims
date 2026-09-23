@@ -32,7 +32,7 @@ class Material(IntEnum):
     SAND = 1
     WATER = 2
     WALL = 3
-    
+    SMOKE = 4
     # BONUS: add more materials here, e.g.
     # WALL = 3   (immovable — never update it)
     # FIRE = 4   (lives a few ticks, then becomes EMPTY)
@@ -44,7 +44,8 @@ PALETTE = {
     Material.EMPTY: (0, 0, 0),
     Material.SAND: (194, 178, 128),
     Material.WATER: (52, 120, 235),
-    Material.WALL: (120, 120, 120)
+    Material.WALL: (120, 120, 120),
+    Material.SMOKE: (150, 150, 150)
 }
 # Turned into a NumPy array so that looking up a cell's colour is a single
 # fast indexing operation: COLORS[grid] gives the RGB value of every cell.
@@ -79,10 +80,12 @@ class SandSim:
         self.height = int(height)
         # NumPy fills with zeros = Material.EMPTY. Good.
         self._types = np.zeros((self.height, self.width), dtype=np.uint8)
+        self._age = np.zeros((self.height, self.width), dtype=np.uint16)
 
     def clear(self) -> None:
         """Reset every cell to empty space."""
         self._types[:] = 0
+        self._age[:] = 0
 
     # ------------------------------------------------------------------ #
     # Painting (mouse input)
@@ -133,11 +136,16 @@ class SandSim:
         G = self._types
         Gp = G.copy()
         H, W = self.height, self.width
+        
+        A = self._age
+        Ap = A.copy()
 
         for y in range(H - 1, -1, -1):
             row = G[y, :]
             is_solid = (row == Material.SAND) | (row == Material.WATER)
-            if not is_solid.any():
+            has_smoke = (row == Material.SMOKE).any()
+            
+            if not is_solid.any() and not has_smoke:
                 continue
 
             can_fall = y + 1 < H
@@ -205,8 +213,70 @@ class SandSim:
 
                     Gp[y, wt] = Material.WATER
                     Gp[y, wx] = Material.EMPTY
+                    
+            
+            #smoke
+            
+            smoke_row = row == Material.SMOKE
+            if not smoke_row.any():
+                continue
+            
+            ages = A[y, :] + 1
+            
+            dying = smoke_row & (ages >= 40)
+            Gp[y, dying] = Material.EMPTY
+            Ap[y, dying] = 0
+            alive = smoke_row & ~dying
+            if not alive.any():
+                continue
+            
+            can_rise = y - 1 >= 0    
+            if not can_rise:
+                Ap[y, alive] = ages[alive]
+                continue
+            
+            above = Gp[y - 1, :]
+            
+            #up
+            rise_mask = alive & (above == Material.EMPTY)
+            Gp[y - 1, rise_mask] = Material.SMOKE
+            Ap[y - 1, rise_mask] = ages[rise_mask]
+            Gp[y, rise_mask] = Material.EMPTY        
+            Ap[y, rise_mask] = 0
+            remaining_smoke = alive & ~rise_mask
+            
+            #diagonal
+            if remaining_smoke.any():
+                above = Gp[y - 1, :]
+                xs = np.nonzero(remaining_smoke)[0]
+                
+                left_ok = (xs - 1 >= 0) & (above[np.clip(xs - 1, 0, W - 1)] == Material.EMPTY)
+                right_ok = (xs + 1 < W) & (above[np.clip(xs + 1, 0, W - 1)] == Material.EMPTY)
+                
+                coin = np.random.random(xs.size) < 0.5
+                want_left = (left_ok & right_ok & coin) | (left_ok & ~right_ok)
+                want_right = (left_ok & right_ok & ~coin) | (right_ok & ~left_ok)
+                dx = np.where(want_left, -1, np.where(want_right, 1, 0))
+                
+                move_xs = xs[dx != 0]
+                move_targets = move_xs + dx[dx != 0]
+                
+                if move_xs.size:
+                    order = np.random.permutation(move_xs.size)
+                    move_xs, move_targets = move_xs[order], move_targets[order]
+                    _, first_idx = np.unique(move_targets, return_index=True)
+                    wx, wt = move_xs[first_idx], move_targets[first_idx]
+                    
+                    Gp[y - 1, wt] = Material.SMOKE
+                    Ap[y - 1, wt] = ages[wx]
+                    Gp[y, wx] = Material.EMPTY
+                    Ap[y, wx] = 0
+                    remaining_smoke[wx] = False
+                    
+                Ap[y, remaining_smoke] = ages[remaining_smoke]
 
         self._types = Gp
+        self._age = Ap
 
                     
                     
@@ -261,6 +331,8 @@ def main() -> None:
                     sim.brush = Material.WATER
                 elif k == pygame.K_3: 
                     sim.brush = Material.WALL
+                elif k == pygame.K_4:
+                    sim.brush = Material.SMOKE
                 elif k in (pygame.K_0, pygame.K_e):
                     sim.brush = Material.EMPTY
                 elif k == pygame.K_LEFTBRACKET:
