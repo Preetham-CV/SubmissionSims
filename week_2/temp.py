@@ -61,6 +61,51 @@ class SandSim:
     ``x`` (0 = left).
     """
 
+    def fallOrSlide(self, GPrime, y,x, material) -> bool:
+        canFall = y+1 < self.height
+        if not canFall:
+            return False
+
+        if GPrime[y+1, x] == Material.EMPTY:
+            GPrime[y+1, x] = material
+            GPrime[y, x] = Material.EMPTY
+            return True
+
+        leftOK = x-1 >= 0 and GPrime[y+1, x-1] == Material.EMPTY
+        rightOK = x+1 < self.width and GPrime[y+1, x+1] == Material.EMPTY
+
+        if leftOK and rightOK:
+            change = _rng.integers(0,2)
+            delX = -1 if change == 0 else 1
+        elif leftOK:
+            delX = -1
+        elif rightOK:
+            delX = 1
+        else:
+            return False
+
+        GPrime[y+1, x + delX] = material
+        GPrime[y, x] = Material.EMPTY
+        return True
+
+    def flow(self, GPrime, y,x,material):
+        leftOK = x-1 >= 0 and GPrime[y, x-1] == Material.EMPTY
+        rightOK = x+1 < self.width and GPrime[y, x+1] == Material.EMPTY
+        
+        if leftOK and rightOK:
+            change = _rng.integers(0,2)
+            delx = -1 if change == 0 else 1
+        elif leftOK:
+            delx = -1
+        elif rightOK:
+            delx = 1
+        else:
+            return
+        
+
+        GPrime[y, x+delx] = material
+        GPrime[y, x] = Material.EMPTY
+
     def __init__(self, width: int, height: int, cell_size: int = 4, fps: int = 60) -> None:
         self.cell_size = cell_size
         self.fps = fps
@@ -137,67 +182,10 @@ class SandSim:
                 material = G[y, x]   
 
                 if material == Material.SAND:
-                    if y + 1 >= self.height:
-                        continue  
-
-                    leftOK = x-1 >= 0 and GPrime[y+1, x-1] == Material.EMPTY
-                    rightOK = x+1 < self.width and GPrime[y+1, x+1] == Material.EMPTY
-
-                    if GPrime[y+1, x] == Material.EMPTY:
-                        GPrime[y+1, x] = Material.SAND
-                        GPrime[y, x] = Material.EMPTY
-                    elif leftOK and rightOK:
-                        change = _rng.integers(0, 2)
-                        GPrime[y, x] = Material.EMPTY
-                        if change == 0:
-                            GPrime[y+1, x-1] = Material.SAND
-                        else:
-                            GPrime[y+1, x+1] = Material.SAND
-                    elif leftOK:
-                        GPrime[y+1, x-1] = Material.SAND
-                        GPrime[y, x] = Material.EMPTY
-                    elif rightOK:
-                        GPrime[y+1, x+1] = Material.SAND
-                        GPrime[y, x] = Material.EMPTY
-
-                elif material == Material.WATER:   
-                    canFall = y + 1 < self.height   
-
-                    leftOK = canFall and x-1 >= 0 and GPrime[y+1, x-1] == Material.EMPTY
-                    rightOK = canFall and x+1 < self.width and GPrime[y+1, x+1] == Material.EMPTY
-
-                    if canFall and GPrime[y+1, x] == Material.EMPTY:
-                        GPrime[y+1, x] = Material.WATER
-                        GPrime[y, x] = Material.EMPTY
-                    elif leftOK and rightOK:
-                        change = _rng.integers(0, 2)
-                        GPrime[y, x] = Material.EMPTY
-                        if change == 0:
-                            GPrime[y+1, x-1] = Material.WATER
-                        else:
-                            GPrime[y+1, x+1] = Material.WATER
-                    elif leftOK:
-                        GPrime[y+1, x-1] = Material.WATER
-                        GPrime[y, x] = Material.EMPTY
-                    elif rightOK:
-                        GPrime[y+1, x+1] = Material.WATER
-                        GPrime[y, x] = Material.EMPTY
-                    else:
-                        leftSpread = x-1 >= 0 and GPrime[y, x-1] == Material.EMPTY
-                        rightSpread = x+1 < self.width and GPrime[y, x+1] == Material.EMPTY
-                        if leftSpread and rightSpread:
-                            change = _rng.integers(0, 2)
-                            GPrime[y, x] = Material.EMPTY
-                            if change == 0:
-                                GPrime[y, x-1] = Material.WATER
-                            else:
-                                GPrime[y, x+1] = Material.WATER
-                        elif leftSpread:
-                            GPrime[y, x-1] = Material.WATER
-                            GPrime[y, x] = Material.EMPTY
-                        elif rightSpread:
-                            GPrime[y, x+1] = Material.WATER
-                            GPrime[y, x] = Material.EMPTY
+                    self.fallOrSlide(GPrime, y, x, material)
+                elif material == Material.WATER:
+                    if not self.fallOrSlide(GPrime, y, x, material):
+                        self.flow(GPrime, y, x, material)
 
                 
         self._types = GPrime
